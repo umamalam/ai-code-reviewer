@@ -2,19 +2,36 @@ const { GoogleGenAI } = require("@google/genai");
 
 const apiKey = process.env.GOOGLE_GEMINI_KEY;
 
-console.log("Gemini API key loaded:", !!apiKey);
+// Boot-time check — only fires once when Render starts/restarts the service
+if (!apiKey) {
+  console.error("FATAL: GOOGLE_GEMINI_KEY is missing or empty at startup");
+} else {
+  console.log("Gemini API key loaded at startup:", true, "length:", apiKey.length);
+}
 
 const ai = new GoogleGenAI({
-    vertexai: false,
-    apiKey
+  vertexai: false,
+  apiKey
 });
+
 async function generateContent(code) {
+  // Request-time check — fires on every call, so you can confirm the key
+  // is still present when an actual request comes in
+  const currentKey = process.env.GOOGLE_GEMINI_KEY;
+  console.log(
+    "Request-time key check — present:", !!currentKey,
+    "length:", currentKey?.length
+  );
+
+  if (!currentKey) {
+    throw new Error("GOOGLE_GEMINI_KEY is missing at request time — check Render environment variables");
+  }
+
+  try {
     const interaction = await ai.interactions.create({
-        model: "gemini-3.6-flash",
-
-        input: code,
-
-        system_instruction: `
+      model: "gemini-2.5-flash", // known-stable model; swap back to gemini-3.6-flash once auth is confirmed working
+      input: code,
+      system_instruction: `
 You are a Senior Software Engineer and Expert Code Reviewer.
 
 Your job is to carefully analyze the provided code and give a practical, accurate, and professional code review.
@@ -102,6 +119,10 @@ Give a short final assessment of the code quality.
     });
 
     return interaction.output_text;
+  } catch (err) {
+    console.error("Gemini API call failed:", err.message);
+    throw err;
+  }
 }
 
 module.exports = generateContent;
