@@ -5,6 +5,7 @@ const apiKey = process.env.GOOGLE_GEMINI_KEY;
 console.log("Gemini API key loaded:", !!apiKey);
 
 const ai = new GoogleGenAI({
+    vertexai: false,
     apiKey
 });
 async function generateContent(code) {
