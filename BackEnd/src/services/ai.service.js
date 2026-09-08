@@ -1,9 +1,12 @@
 const { GoogleGenAI } = require("@google/genai");
 
-const ai = new GoogleGenAI({
-    apiKey: process.env.GOOGLE_GEMINI_KEY
-});
+const apiKey = process.env.GOOGLE_GEMINI_KEY;
 
+console.log("Gemini API key loaded:", !!apiKey);
+
+const ai = new GoogleGenAI({
+    apiKey
+});
 async function generateContent(code) {
     const interaction = await ai.interactions.create({
         model: "gemini-3.6-flash",
