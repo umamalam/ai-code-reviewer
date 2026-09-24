@@ -1,0 +1,273 @@
+* {
+  margin: 0%;
+  padding: 0%;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+main {
+  height: 100%;
+  width: 100%;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1rem;
+}
+
+main .left,
+main .right {
+  height: 100%;
+  flex-basis: 50%;
+  border-radius: 0.7rem;
+}
+
+main .left {
+  background-color: #000000;
+  position: relative;
+}
+
+.left .code,
+.code pre,
+.code pre code {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  border-radius: 0.7rem;
+  background-color: #0c0c0c;
+}
+
+main .left .review {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  background-color: rgb(219, 219, 255);
+  color: #000000;
+  padding: 0.5rem 2rem;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0.7rem;
+}
+
+
+main .right {
+  background-color: #343434;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  overflow: auto;
+}
+
+/* App shell / tabs */
+.app-shell {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #1a1a1a;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem 0;
+}
+
+.tabs button {
+  background: transparent;
+  border: none;
+  color: #999;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  color: #fff;
+  background-color: #000;
+}
+
+.app-shell > main {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Multi-file review form */
+.left {
+  display: flex;
+  flex-direction: column;
+}
+
+.files-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-block {
+  border: 1px solid #333;
+  border-radius: 0.7rem;
+  overflow: hidden;
+}
+
+.file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #151515;
+  padding: 0.4rem 0.6rem;
+}
+
+.filename-input {
+  background: transparent;
+  border: none;
+  color: #ddd;
+  font-family: monospace;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.filename-input:focus {
+  outline: none;
+}
+
+.remove-file {
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+}
+
+.review-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding-top: 0.75rem;
+}
+
+.add-file,
+.review {
+  border: none;
+  border-radius: 0.7rem;
+  padding: 0.5rem 1.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.add-file {
+  background-color: transparent;
+  color: rgb(219, 219, 255);
+  border: 1px solid rgb(219, 219, 255);
+}
+
+.review {
+  background-color: rgb(219, 219, 255);
+  color: #000;
+}
+
+.review:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  color: #ff8a80;
+  margin-top: 0.5rem;
+}
+
+.placeholder {
+  color: #999;
+}
+
+/* Issues table */
+.issues-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.issues-table th,
+.issues-table td {
+  border: 1px solid #4a4a4a;
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.issues-table pre {
+  white-space: pre-wrap;
+  background: #222;
+  padding: 0.4rem;
+  border-radius: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+/* Dashboard */
+.dashboard {
+  padding: 1.5rem 2rem;
+  overflow-y: auto;
+  height: 100%;
+  color: #eee;
+}
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  background: #232323;
+  border-radius: 0.7rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.stat-card.critical { border: 1px solid #e53935; }
+.stat-card.security { border: 1px solid #8e24aa; }
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.stat-label {
+  color: #999;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.chart-block {
+  background: #232323;
+  border-radius: 0.7rem;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.chart-block h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  color: #ccc;
+}
+
+.recent-block table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.recent-block th,
+.recent-block td {
+  border-bottom: 1px solid #3a3a3a;
+  padding: 0.5rem;
+  text-align: left;
+}
