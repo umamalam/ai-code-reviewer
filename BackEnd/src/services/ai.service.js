@@ -13,6 +13,7 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_KEY);
 const SEVERITIES = ["critical", "major", "minor", "nit"];
 const CATEGORIES = [
     "security",
+    "correctness",
     "performance",
     "architecture",
     "readability",
@@ -65,16 +66,42 @@ Never invent issues to pad the list.
 `;
 
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-3.8-flash",
     systemInstruction: SYSTEM_INSTRUCTION,
     generationConfig: {
         responseMimeType: "application/json"
     }
 });
 
-async function generateContent(prompt) {
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+function isRetryable(err) {
+    // The SDK throws GoogleGenerativeAIFetchError with a numeric `status`.
+    // 503 = model temporarily overloaded, 429 = rate limited -- both worth retrying.
+    return err && (err.status === 503 || err.status === 429);
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateContent(prompt, { maxRetries = 3 } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch (err) {
+            lastErr = err;
+            if (!isRetryable(err) || attempt === maxRetries) throw err;
+
+            // Exponential backoff with jitter: ~1s, ~2s, ~4s (plus up to 300ms jitter).
+            const delay = 2 ** attempt * 1000 + Math.random() * 300;
+            console.warn(
+                `[ai.service] Gemini returned ${err.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`
+            );
+            await sleep(delay);
+        }
+    }
+    throw lastErr;
 }
 
 module.exports = generateContent;
