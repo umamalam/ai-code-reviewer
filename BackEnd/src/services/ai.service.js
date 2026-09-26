@@ -1,128 +1,109 @@
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const apiKey = process.env.GOOGLE_GEMINI_KEY;
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_KEY);
 
-// Boot-time check — only fires once when Render starts/restarts the service
-if (!apiKey) {
-  console.error("FATAL: GOOGLE_GEMINI_KEY is missing or empty at startup");
-} else {
-  console.log("Gemini API key loaded at startup:", true, "length:", apiKey.length);
+/*
+ * This is NOT a fine-tuned model. It's the stock Gemini model steered with a
+ * structured system instruction + a fixed output schema (a "review taxonomy").
+ * That's an honest and genuinely useful technique on its own -- it's what
+ * gives every review a consistent, machine-parseable shape (so the dashboard
+ * can chart it), and it's what most AI review tools actually do under the
+ * hood rather than training a custom model per customer.
+ */
+const SEVERITIES = ["critical", "major", "minor", "nit"];
+const CATEGORIES = [
+    "security",
+    "correctness",
+    "performance",
+    "architecture",
+    "readability",
+    "testing",
+    "style"
+];
+
+const SYSTEM_INSTRUCTION = `
+You are a senior code reviewer with 7+ years of experience reviewing production codebases.
+
+You will be given one or more files (or diff hunks) that belong to the SAME change set.
+Review them together, not in isolation -- flag issues that only become visible when files
+are considered as a connected unit (e.g. a function's contract changed in one file but
+callers in another file weren't updated).
+
+Focus areas, in priority order:
+1. Security -- injection, auth/authz gaps, secrets, unsafe deserialization, XSS/CSRF, etc.
+2. Correctness -- logic errors, unhandled edge cases, race conditions.
+3. Architecture -- coupling, layering violations, poor separation of concerns.
+4. Performance -- unnecessary work, N+1 patterns, blocking calls on hot paths.
+5. Readability & maintainability -- naming, duplication, dead code.
+6. Testing -- missing or weak coverage for the changed behavior.
+
+You MUST respond with ONLY valid JSON (no markdown fences, no commentary outside the JSON),
+matching exactly this shape:
+
+{
+  "summary": "2-4 sentence high-level assessment of the change set as a whole",
+  "issues": [
+    {
+      "file": "filename this issue belongs to",
+      "line": "approximate line or hunk reference, or null if not applicable",
+      "severity": "one of: ${SEVERITIES.join(" | ")}",
+      "category": "one of: ${CATEGORIES.join(" | ")}",
+      "title": "short one-line description of the issue",
+      "description": "why it matters, 1-3 sentences",
+      "suggestion": "concrete fix or refactor, as a short code snippet or instruction"
+    }
+  ]
 }
 
-const ai = new GoogleGenAI({
-  vertexai: false,
-  apiKey
+Severity guide:
+- critical: will cause a security incident, data loss, or production outage.
+- major: real bug or serious design problem, should block merge.
+- minor: worth fixing, not urgent.
+- nit: style/preference, optional.
+
+If the code has no issues worth flagging, return an empty "issues" array and say so in the summary.
+Never invent issues to pad the list.
+`;
+
+const model = genAI.getGenerativeModel({
+    model: "gemini-3.8-flash",
+    systemInstruction: SYSTEM_INSTRUCTION,
+    generationConfig: {
+        responseMimeType: "application/json"
+    }
 });
 
-async function generateContent(code) {
-  // Request-time check — fires on every call, so you can confirm the key
-  // is still present when an actual request comes in
-  const currentKey = process.env.GOOGLE_GEMINI_KEY;
-  console.log(
-    "Request-time key check — present:", !!currentKey,
-    "length:", currentKey?.length
-  );
+function isRetryable(err) {
+    // The SDK throws GoogleGenerativeAIFetchError with a numeric `status`.
+    // 503 = model temporarily overloaded, 429 = rate limited -- both worth retrying.
+    return err && (err.status === 503 || err.status === 429);
+}
 
-  if (!currentKey) {
-    throw new Error("GOOGLE_GEMINI_KEY is missing at request time — check Render environment variables");
-  }
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  try {
-    const interaction = await ai.interactions.create({
-      model: "gemini-2.5-flash", // known-stable model; swap back to gemini-3.6-flash once auth is confirmed working
-      input: code,
-      system_instruction: `
-You are a Senior Software Engineer and Expert Code Reviewer.
+async function generateContent(prompt, { maxRetries = 3 } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch (err) {
+            lastErr = err;
+            if (!isRetryable(err) || attempt === maxRetries) throw err;
 
-Your job is to carefully analyze the provided code and give a practical, accurate, and professional code review.
-
-Review the code for:
-
-- Bugs and logical errors
-- Security vulnerabilities
-- Performance issues
-- Poor coding practices
-- Unnecessary complexity
-- Code duplication
-- Readability and maintainability
-- Error handling
-- Scalability
-- Missing validation
-- Incorrect API, library, or language usage
-- Potential edge cases
-
-Important rules:
-
-- Do not invent problems.
-- Do not criticize code simply because it is written differently.
-- Clearly distinguish actual bugs from optional improvements.
-- Prioritize important issues.
-- Explain why each issue matters.
-- Provide a recommended fix when necessary.
-- Preserve the original functionality.
-- Do not assume requirements that are not present in the code.
-
-Use these severity levels:
-
-🔴 Critical — Severe security vulnerabilities, major bugs, or major failures.
-
-🟠 High — Significant bugs, serious performance problems, or reliability issues.
-
-🟡 Medium — Potential bugs or important maintainability problems.
-
-🔵 Low — Minor improvements, readability, style, or optional optimizations.
-
-Use this response format:
-
-## Code Review
-
-### Summary
-
-Briefly explain what the code does and whether it generally works as intended.
-
-### Issues Found
-
-For each issue provide:
-
-**Severity:** Critical / High / Medium / Low
-
-**Issue:** Explain the problem clearly.
-
-**Why it matters:** Explain the impact.
-
-**Recommended Fix:** Explain how to fix it.
-
-If no real issues are found, write:
-
-"No critical or functional issues found."
-
-### Improvements
-
-Mention useful improvements that are not necessarily bugs.
-
-If there are no meaningful improvements, write:
-
-"No significant improvements required."
-
-### Improved Code
-
-Provide a corrected or refactored version when necessary.
-
-If no changes are necessary, write:
-
-"No changes necessary."
-
-### Overall Assessment
-
-Give a short final assessment of the code quality.
-`
-    });
-
-    return interaction.output_text;
-  } catch (err) {
-    console.error("Gemini API call failed:", err.message);
-    throw err;
-  }
+            // Exponential backoff with jitter: ~1s, ~2s, ~4s (plus up to 300ms jitter).
+            const delay = 2 ** attempt * 1000 + Math.random() * 300;
+            console.warn(
+                `[ai.service] Gemini returned ${err.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`
+            );
+            await sleep(delay);
+        }
+    }
+    throw lastErr;
 }
 
 module.exports = generateContent;
+module.exports.SEVERITIES = SEVERITIES;
+module.exports.CATEGORIES = CATEGORIES;
